@@ -1,0 +1,118 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+# TODO: Configure the following repository secrets before tagging a release
+# (Settings → Secrets and variables → Actions):
+#
+#   Code-signing identity import (used to build a temporary keychain):
+#     MACOS_CERTIFICATE        base64 of the Developer ID Application .p12
+#                              (e.g. `base64 -i cert.p12 | pbcopy`)
+#     MACOS_CERTIFICATE_PWD    password that protects the .p12
+#     KEYCHAIN_PASSWORD        any throwaway password for the temp keychain
+#
+#   Signing + notarization (consumed by scripts/sign-notarize.sh):
+#     DEVELOPER_ID_APPLICATION  the signing identity name, e.g.
+#                               "Developer ID Application: Your Name (TEAMID)"
+#     APPLE_ID                  Apple ID email used for notarization
+#     APPLE_TEAM_ID             10-char Apple Developer Team ID
+#     APP_SPECIFIC_PASSWORD     app-specific password for that Apple ID
+#
+# GITHUB_TOKEN is provided automatically and is used to publish the Release.
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Derive version from tag
+        id: version
+        # Strip the leading "v" from refs/tags/vX.Y.Z -> X.Y.Z
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Building version $VERSION"
+
+      - name: Import Developer ID certificate into a temporary keychain
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          CERT_PATH="$RUNNER_TEMP/certificate.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain-db"
+
+          echo "$MACOS_CERTIFICATE" | base64 --decode > "$CERT_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          security import "$CERT_PATH" \
+            -P "$MACOS_CERTIFICATE_PWD" \
+            -A -t cert -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
+
+          # Allow codesign to use the key without an interactive prompt.
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          # Make the temp keychain the default search list (keep the login keychain too).
+          security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
+          rm -f "$CERT_PATH"
+
+      - name: Build production app bundle
+        env:
+          CHANNEL: production
+          VERSION: ${{ steps.version.outputs.version }}
+        run: ./scripts/build-app-bundle.sh
+
+      - name: Sign, notarize, and staple DMG
+        env:
+          DEVELOPER_ID_APPLICATION: ${{ secrets.DEVELOPER_ID_APPLICATION }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APP_SPECIFIC_PASSWORD: ${{ secrets.APP_SPECIFIC_PASSWORD }}
+        # Produces the signed, notarized, stapled DMG at .build/release/CLINotify.dmg
+        run: ./scripts/sign-notarize.sh
+
+      - name: Create GitHub Release and upload DMG
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          files: .build/release/CLINotify.dmg
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate Homebrew cask
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          # The release asset URL for the DMG uploaded in the previous step.
+          DOWNLOAD_URL: https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/CLINotify.dmg
+          OUT_PATH: .build/release/clinotify.rb
+        run: |
+          set -euo pipefail
+          ./scripts/generate-cask.sh
+          echo "----- Generated Homebrew cask (.build/release/clinotify.rb) -----"
+          cat .build/release/clinotify.rb
+          # TODO: commit/push this cask to the ZichengWangdrzz/homebrew-clinotify tap,
+          # e.g. via a checkout of the tap repo + a PAT with push access, or
+          # publish it through your tap's own automation.
+
+      - name: Upload cask as a build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: homebrew-cask
+          path: .build/release/clinotify.rb

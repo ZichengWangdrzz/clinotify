@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "animations": {
+    "claude_code": [
+      {
+        "id": "right-hand-wave",
+        "title": "Right hand wave",
+        "summary": "Claude pixel crab waves its right hand.",
+        "access": "free"
+      },
+      {
+        "id": "squint-leg-wave",
+        "title": "Squint leg wave",
+        "summary": "Claude pixel crab squints and ripples its legs.",
+        "access": "free"
+      }
+    ]
+  },
+  "bubbleSkins": {
+    "claude_code": [
+      {
+        "id": "windows-xp",
+        "title": "Windows XP",
+        "summary": "Blue beveled speech bubble with green OK button.",
+        "access": "free"
+      },
+      {
+        "id": "classic-pixel",
+        "title": "Classic Pixel",
+        "summary": "Flat white pixel speech bubble with green pixel OK button.",
+        "access": "paid"
+      }
+    ]
+  },
+  "sounds": {
+    "claude_code": [
+      {
+        "id": "glass",
+        "title": "Glass",
+        "summary": "Soft glass chime.",
+        "access": "free"
+      },
+      {
+        "id": "ping",
+        "title": "Ping",
+        "summary": "Short ping.",
+        "access": "free"
+      },
+      {
+        "id": "submarine",
+        "title": "Submarine",
+        "summary": "Low submarine ping.",
+        "access": "free"
+      },
+      {
+        "id": "arcade-chime",
+        "title": "Arcade Chime",
+        "summary": "Retro arcade chime pack.",
+        "access": "paid"
+      }
+    ]
+  }
+}
