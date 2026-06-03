@@ -62,7 +62,7 @@ final class MenuBarController: NSObject {
             tty: Terminal.currentTTY(),
             cwd: FileManager.default.currentDirectoryPath,
             session: "manual-test",
-            title: "Manual test"
+            title: "Action needed"
         )
         eventRouter.route(event, bypassRegistry: true)
     }
@@ -74,7 +74,7 @@ final class MenuBarController: NSObject {
             tty: Terminal.currentTTY(),
             cwd: FileManager.default.currentDirectoryPath,
             session: "manual-test",
-            title: "Manual test"
+            title: "Action needed"
         )
         eventRouter.route(event, bypassRegistry: true)
     }
@@ -89,6 +89,9 @@ final class MenuBarController: NSObject {
     }
 
     @objc private func uninstallHooks() {
+        // Disable autostart first so launchd KeepAlive can't relaunch the daemon after removal — the
+        // same teardown the CLI runs. Harmless no-op when autostart was never enabled.
+        LaunchAgentControl.disable(for: AppChannel.current)
         do {
             try installer.uninstall()
             showAlert(message: "Hooks removed.")

@@ -21,6 +21,11 @@ on:
 #     APPLE_TEAM_ID             10-char Apple Developer Team ID
 #     APP_SPECIFIC_PASSWORD     app-specific password for that Apple ID
 #
+#   Homebrew tap publish (optional — enables `brew install --cask` to track each release):
+#     HOMEBREW_TAP_TOKEN        a PAT with contents:write on
+#                               ZichengWangdrzz/homebrew-clinotify. If unset, the cask is only
+#                               uploaded as a build artifact (the tap is not updated).
+#
 # GITHUB_TOKEN is provided automatically and is used to publish the Release.
 
 permissions:
@@ -75,6 +80,10 @@ jobs:
         env:
           CHANNEL: production
           VERSION: ${{ steps.version.outputs.version }}
+          # Ship an optimized, universal (Apple Silicon + Intel) build. RELEASE also drops the debug
+          # get-task-allow entitlement that would otherwise fail notarization under the hardened runtime.
+          CONFIGURATION: release
+          UNIVERSAL: "1"
         run: ./scripts/build-app-bundle.sh
 
       - name: Sign, notarize, and staple DMG
@@ -101,15 +110,39 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
           # The release asset URL for the DMG uploaded in the previous step.
           DOWNLOAD_URL: https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/CLINotify.dmg
+          # Track the real repo so the cask never ships an example.com homepage.
+          HOMEPAGE: https://github.com/${{ github.repository }}
           OUT_PATH: .build/release/clinotify.rb
         run: |
           set -euo pipefail
           ./scripts/generate-cask.sh
           echo "----- Generated Homebrew cask (.build/release/clinotify.rb) -----"
           cat .build/release/clinotify.rb
-          # TODO: commit/push this cask to the ZichengWangdrzz/homebrew-clinotify tap,
-          # e.g. via a checkout of the tap repo + a PAT with push access, or
-          # publish it through your tap's own automation.
+
+      - name: Publish Homebrew cask to tap
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${HOMEBREW_TAP_TOKEN:-}" ]]; then
+            echo "HOMEBREW_TAP_TOKEN not set — skipping tap publish; the cask is uploaded as an artifact below."
+            exit 0
+          fi
+          TAP_REPO="ZichengWangdrzz/homebrew-clinotify"
+          git clone --depth 1 "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/${TAP_REPO}.git" tap
+          mkdir -p tap/Casks
+          cp .build/release/clinotify.rb tap/Casks/clinotify.rb
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Casks/clinotify.rb
+          if git diff --cached --quiet; then
+            echo "Cask unchanged — nothing to publish."
+          else
+            git commit -m "clinotify ${VERSION}"
+            git push
+          fi
 
       - name: Upload cask as a build artifact
         uses: actions/upload-artifact@v4

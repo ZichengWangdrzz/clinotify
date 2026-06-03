@@ -22,6 +22,8 @@ struct CLINotifyCLI {
             handleStatus()
         case "launch":
             handleLaunch()
+        case "autostart":
+            handleAutostart(Array(args.dropFirst()))
         case "license":
             handleLicense(Array(args.dropFirst()))
         case "settings":
@@ -37,10 +39,62 @@ struct CLINotifyCLI {
         case "install":
             handleInstall()
         case "uninstall":
-            handleUninstall()
+            handleUninstall(Array(args.dropFirst()))
+
+        // Top-level skin verbs (ADR: the user-facing surface). Each delegates to the per-agent
+        // settings handler with `claude-code` defaulted in, so `clinotify bubble windows-xp`
+        // works without the redundant agent positional. No arg => list options.
+        case "animation":
+            handleAnimationSettings(CLIArgs.withDefaultAgent(Array(args.dropFirst())), store: NotificationPreferencesStore())
+        case "bubble", "skin":
+            handleSkinSettings(CLIArgs.withDefaultAgent(Array(args.dropFirst())), store: NotificationPreferencesStore())
+        case "background":
+            handleBackground(Array(args.dropFirst()))
+        case "frame": // hidden alias of `background`, parallels `settings frame claude-code <id>`
+            handleFrameSettings(CLIArgs.withDefaultAgent(Array(args.dropFirst())), store: NotificationPreferencesStore())
+        case "sound":
+            handleSoundSettings(CLIArgs.withDefaultAgent(Array(args.dropFirst())), store: NotificationPreferencesStore())
+        case "mute":
+            handleMuteSetting(Array(args.dropFirst()))
+        case "scale":
+            handleScaleSetting(Array(args.dropFirst()), store: NotificationPreferencesStore())
+        case "alerts":
+            handleAlerts(Array(args.dropFirst()))
+
+        case "help", "-h", "--help":
+            let rest = Array(args.dropFirst())
+            printUsage(advanced: rest.contains("--all") || rest.contains("all") || rest.contains("advanced"))
+
         default:
             printUsage()
         }
+    }
+
+    /// Master on/off for all toasts. `clinotify alerts` prints the current state; `clinotify
+    /// alerts on|off` sets it.
+    private static func handleAlerts(_ args: [String]) {
+        let store = NotificationPreferencesStore()
+        guard let value = args.first else {
+            print("alerts: \(store.load().globalEnabled ? "on" : "off")")
+            return
+        }
+        handleBooleanSetting(["alerts", value], store: store)
+    }
+
+    /// The friendly name for the frame axis: `background on` shows the panel/card behind the toast,
+    /// `background off` removes it (mascot + bubble float). `clinotify background` prints the state.
+    private static func handleBackground(_ args: [String]) {
+        let store = NotificationPreferencesStore()
+        guard let action = positionalArgs(args).first else {
+            print("background: \(store.load().claudeCodeFrameSkin == .panel ? "on" : "off")")
+            return
+        }
+        guard let target = CLIArgs.backgroundTarget(action, current: store.load().claudeCodeFrameSkin) else {
+            printError("Usage: clinotify background [on|off|toggle]")
+            return
+        }
+        guard let updated = try? store.update({ _ = $0.selectClaudeCodeFrameSkin(target) }) else { return }
+        print("background: \(updated.claudeCodeFrameSkin == .panel ? "on" : "off")")
     }
 
     /// Install the hooks + CLI symlink for THIS binary's channel (production via `clinotify`, dev via
@@ -55,14 +109,42 @@ struct CLINotifyCLI {
         }
     }
 
-    private static func handleUninstall() {
+    /// Full teardown for this binary's channel. Order matters: disable the autostart LaunchAgent FIRST
+    /// (else launchd KeepAlive would relaunch the daemon we are removing), then strip hooks + CLI
+    /// symlink, then clean up leftover state. `--purge` also deletes the channel's Application Support
+    /// directory (preferences/license/registry); without it those are kept so a reinstall restores the
+    /// user's settings, and only the transient socket/lock are swept.
+    private static func handleUninstall(_ args: [String] = []) {
+        let purge = args.contains("--purge")
+        let channel = AppChannel.current
         let selfURL = URL(fileURLWithPath: runningExecutablePath()).resolvingSymlinksInPath()
+
+        // 1. Tear down autostart so a deleted daemon can never be resurrected by launchd KeepAlive.
+        //    Harmless no-op if autostart was never enabled.
+        LaunchAgentControl.disable(for: channel)
+
+        // 2. Remove hooks + CLI symlink + Codex notify (+ orphaned *.clinotify.bak backups).
         do {
             try Installer(cliURLProvider: { selfURL }).uninstall()
-            print("Uninstalled CLINotify (\(AppChannel.current.rawValue)) hooks + CLI symlink.")
         } catch {
             printError("Uninstall failed: \(error.localizedDescription)")
+            return
         }
+
+        // 3. Clean leftover state. The daemon unlinks its socket on normal start/stop, so a lingering
+        //    socket/lock only survives an ungraceful kill — best-effort remove them either way.
+        let fileManager = FileManager.default
+        if purge {
+            try? fileManager.removeItem(at: ApplicationPaths.applicationSupportDirectory)
+        } else {
+            try? fileManager.removeItem(atPath: ApplicationPaths.socketPath)
+            try? fileManager.removeItem(atPath: ApplicationPaths.lockPath)
+        }
+
+        let stateNote = purge
+            ? " state directory purged"
+            : " (settings/license kept — use `\(channel.cliName) uninstall --purge` to remove them)"
+        print("Uninstalled CLINotify (\(channel.rawValue)): hooks + CLI symlink + autostart agent removed.\(stateNote)")
     }
 
     /// Dismiss the toast for a session. Invoked by the Claude Code UserPromptSubmit / SessionEnd hooks
@@ -170,6 +252,105 @@ struct CLINotifyCLI {
         printError("Launched \(appURL.path), but helper IPC did not become reachable.")
     }
 
+    private static func handleAutostart(_ args: [String]) {
+        let action = args.first ?? "status"
+        let channel = AppChannel.current
+        let plistURL = LaunchAgent.plistURL(for: channel)
+        let label = LaunchAgent.label(for: channel)
+        let domain = "gui/\(getuid())"
+        let domainTarget = "\(domain)/\(label)"
+
+        switch action {
+        case "on":
+            guard let appURL = bundledAppURL() else {
+                printError("Cannot locate CLINotify.app from this clinotify binary.")
+                return
+            }
+            let daemonPath = appURL.appendingPathComponent("Contents/MacOS/CLINotifyApp").path
+            do {
+                try FileManager.default.createDirectory(
+                    at: plistURL.deletingLastPathComponent(),
+                    withIntermediateDirectories: true
+                )
+                try LaunchAgent.plistXML(channel: channel, daemonExecutablePath: daemonPath)
+                    .write(to: plistURL, atomically: true, encoding: .utf8)
+            } catch {
+                printError("Failed to write LaunchAgent plist: \(error.localizedDescription)")
+                return
+            }
+
+            // Hand control to launchd. Ordering matters: (1) drop any prior registration; (2) stop the
+            // manually-launched daemon and wait for it to release the single-instance flock, so the
+            // managed instance can acquire it (else it self-exits and KeepAlive churns); (3) load. We
+            // bootout BEFORE killing so launchd doesn't immediately relaunch the one we're killing.
+            _ = runLaunchctl(["bootout", domainTarget])
+            _ = runProcess("/usr/bin/pkill", ["-f", daemonPath])
+            waitForDaemonExit(matching: daemonPath, timeout: 5)
+            if !runLaunchctl(["bootstrap", domain, plistURL.path]) {
+                _ = runLaunchctl(["load", "-w", plistURL.path]) // older API fallback
+            }
+            _ = runLaunchctl(["kickstart", domainTarget]) // ensure started (no-op if RunAtLoad already did)
+
+            let deadline = Date().addingTimeInterval(6)
+            while Date() < deadline {
+                if helperIsReachable() {
+                    print("autostart: on — \(label) loaded; the daemon starts at login and relaunches if it exits.")
+                    print("plist: \(plistURL.path)")
+                    print("(to fully stop it, run: \(channel.cliName) autostart off)")
+                    return
+                }
+                Thread.sleep(forTimeInterval: 0.1)
+            }
+            printError("autostart: wrote \(plistURL.path) and loaded the agent, but the helper IPC did not become reachable.")
+
+        case "off":
+            LaunchAgentControl.disable(for: channel)
+            print("autostart: off — \(label) removed. The daemon will no longer start automatically.")
+
+        case "status":
+            let exists = FileManager.default.fileExists(atPath: plistURL.path)
+            print("autostart: \(exists ? "on" : "off") (\(label))")
+            print("plist: \(plistURL.path)")
+
+        default:
+            printError("usage: \(channel.cliName) autostart [on|off|status]")
+        }
+    }
+
+    /// Run `/bin/launchctl` with args; true on exit 0. launchctl is noisy on already-loaded / not-loaded
+    /// states, so callers tolerate failures (the fallbacks and the final reachability check are the
+    /// real success signal).
+    @discardableResult
+    private static func runLaunchctl(_ args: [String]) -> Bool {
+        runProcess("/bin/launchctl", args)
+    }
+
+    @discardableResult
+    private static func runProcess(_ path: String, _ args: [String]) -> Bool {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: path)
+        process.arguments = args
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        do {
+            try process.run()
+            process.waitUntilExit()
+            return process.terminationStatus == 0
+        } catch {
+            return false
+        }
+    }
+
+    /// Poll until no process matches `pathFragment` (the daemon binary path), up to `timeout` seconds.
+    /// `pgrep` exits 1 when nothing matches, which is our "fully gone" signal.
+    private static func waitForDaemonExit(matching pathFragment: String, timeout: TimeInterval) {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if !runProcess("/usr/bin/pgrep", ["-f", pathFragment]) { return }
+            Thread.sleep(forTimeInterval: 0.1)
+        }
+    }
+
     private static func handleLicense(_ args: [String]) {
         let manager = LicenseManager()
         switch args.first {
@@ -204,22 +385,18 @@ struct CLINotifyCLI {
     }
 
     private static func handleTest(_ args: [String]) {
-        guard args.first == "claude-code" else {
-            printTestUsage()
-            return
-        }
-        let type = EventType(rawValue: flagValue("type", in: args) ?? "done") ?? .done
-        let label = flagValue("label", in: args) ?? "Manual Test"
-        // Default the test session to the label so two different `--label`s stack as two toasts and
-        // repeating one replaces in place; `--session` overrides for explicit control.
-        let session = flagValue("session", in: args) ?? label
+        // `clinotify test [done|attention] [--label <text>] [--session <id>]`. The legacy
+        // `claude-code` positional is tolerated. Parsing is unit-tested in CLIArgsTests.
+        // Default session = label so two different `--label`s stack as two toasts and repeating
+        // one replaces in place; `--session` overrides for explicit control.
+        let invocation = CLIArgs.parseTestArgs(args)
         let event = AgentEvent(
             source: .claudeCode,
-            type: type,
+            type: invocation.type,
             tty: Terminal.currentTTY() ?? Terminal.parentTTY() ?? "manual",
             cwd: FileManager.default.currentDirectoryPath,
-            session: session,
-            title: label,
+            session: invocation.session,
+            title: invocation.label,
             senderPID: Terminal.currentPID(),
             senderPPID: Terminal.parentPID()
         )
@@ -340,7 +517,9 @@ struct CLINotifyCLI {
         while index < args.count {
             let arg = args[index]
             if arg.hasPrefix("--") {
-                index += 2 // skip flag and its value
+                // Skip the flag and its value — but a trailing valueless flag advances by 1 only,
+                // so it's dropped rather than swallowing the next-loop boundary. (Mirrors parseFlags.)
+                index += (index + 1 < args.count) ? 2 : 1
                 continue
             }
             result.append(arg)
@@ -411,11 +590,12 @@ struct CLINotifyCLI {
     }
 
     private static func handleAnimationSettings(_ args: [String], store: NotificationPreferencesStore) {
-        guard args.first == "claude-code" else {
+        let positional = positionalArgs(args)
+        guard positional.first == "claude-code" else {
             printSettingsUsage()
             return
         }
-        if args.count == 1 {
+        if positional.count == 1 {
             let preferences = store.load()
             print("claude-code animation: \(preferences.claudeCodeAnimation.rawValue)")
             print("available:")
@@ -425,7 +605,7 @@ struct CLINotifyCLI {
             return
         }
 
-        guard args.count == 2, let animation = ClaudeCodeAnimation(rawValue: args[1]) else {
+        guard positional.count == 2, let animation = ClaudeCodeAnimation(rawValue: positional[1]) else {
             printSettingsUsage()
             return
         }
@@ -441,11 +621,12 @@ struct CLINotifyCLI {
     }
 
     private static func handleSkinSettings(_ args: [String], store: NotificationPreferencesStore) {
-        guard args.first == "claude-code" else {
+        let positional = positionalArgs(args)
+        guard positional.first == "claude-code" else {
             printSettingsUsage()
             return
         }
-        if args.count == 1 {
+        if positional.count == 1 {
             let preferences = store.load()
             print("claude-code bubble skin: \(preferences.claudeCodeBubbleSkin.rawValue)")
             print("available:")
@@ -455,7 +636,7 @@ struct CLINotifyCLI {
             return
         }
 
-        guard args.count == 2, let skin = OverlaySkin(rawValue: args[1]) else {
+        guard positional.count == 2, let skin = OverlaySkin(rawValue: positional[1]) else {
             printSettingsUsage()
             return
         }
@@ -471,11 +652,12 @@ struct CLINotifyCLI {
     }
 
     private static func handleFrameSettings(_ args: [String], store: NotificationPreferencesStore) {
-        guard args.first == "claude-code" else {
+        let positional = positionalArgs(args)
+        guard positional.first == "claude-code" else {
             printSettingsUsage()
             return
         }
-        if args.count == 1 {
+        if positional.count == 1 {
             let preferences = store.load()
             print("claude-code frame: \(preferences.claudeCodeFrameSkin.rawValue)")
             print("available:")
@@ -485,7 +667,7 @@ struct CLINotifyCLI {
             return
         }
 
-        guard args.count == 2, let frame = FrameSkin(rawValue: args[1]) else {
+        guard positional.count == 2, let frame = FrameSkin(rawValue: positional[1]) else {
             printSettingsUsage()
             return
         }
@@ -537,13 +719,26 @@ struct CLINotifyCLI {
         }
 
         let stdinObject = readStdinObjectIfAvailable()
+        // Drop Claude Code's `idle_prompt` Notification (the "you've been idle" nag): it re-fires while
+        // the user is away and would re-spawn a toast they already dismissed. Genuine needs-you/done
+        // notifications are kept. See CLIArgs.isIdleNudge.
+        if CLIArgs.isIdleNudge(source: source, notificationType: stringValue(for: ["notification_type"], in: stdinObject)) {
+            return
+        }
         let event = AgentEvent(
             source: source,
             type: type,
             tty: Terminal.parentTTY(),
             cwd: stringValue(for: ["cwd", "current_dir"], in: stdinObject) ?? FileManager.default.currentDirectoryPath,
             session: stringValue(for: ["session_id", "session", "sessionId"], in: stdinObject),
-            title: stringValue(for: ["title", "message"], in: stdinObject),
+            // For Claude Code, deliberately DON'T use the Notification hook's verbose `message`
+            // ("Claude is waiting for your input") as the label — the toast's presence already means
+            // "needs you", so the label stays a stable identifier (project basename). See CLIArgs.eventTitle.
+            title: CLIArgs.eventTitle(
+                source: source,
+                title: stringValue(for: ["title"], in: stdinObject),
+                message: stringValue(for: ["message"], in: stdinObject)
+            ),
             senderPID: Terminal.currentPID(),
             senderPPID: Terminal.parentPID()
         )
@@ -716,34 +911,53 @@ struct CLINotifyCLI {
         FileHandle.standardError.write(Data("clinotify: \(message)\n".utf8))
     }
 
-    private static func printUsage() {
+    private static func printUsage(advanced: Bool = false) {
         let text = """
-        Usage:
-          clinotify install
-          clinotify uninstall
-          clinotify name "<name>"
-          clinotify name --clear
-          clinotify stop
-          clinotify list
-          clinotify status
-          clinotify launch
-          clinotify license <status|activate-local <key>|reset>
-          clinotify settings
-          clinotify settings set <alerts|animation|sound> <on|off>
-          clinotify settings scale [50%-200%]
-          clinotify settings animation claude-code <right-hand-wave|squint-leg-wave>
-          clinotify settings skin claude-code <windows-xp|classic-pixel>
-          clinotify settings frame claude-code <panel|none>
-          clinotify settings sound claude-code [<glass|ping|submarine|arcade-chime>] [--tty <tty>]
-          clinotify settings mute <on|off|toggle> [--tty <tty>]
-          clinotify settings animate <on|off|toggle> [--tty <tty>]
-          clinotify settings show [--tty <tty>]
-          clinotify test claude-code [--type done|attention] [--label <text>]
+        CLINotify — desktop toasts when Claude Code or Codex finishes or needs you.
+
+        Setup
+          clinotify install               Install the CLI + Claude Code & Codex hooks
+          clinotify uninstall             Remove hooks + CLI symlink + autostart agent (--purge also deletes settings/license)
+          clinotify launch                Start the menu-bar app
+          clinotify autostart on          Keep the app running across logout/reboot (off | status)
+          clinotify status                Channel, helper state, and paths
+          clinotify list                  Show registered sessions
+
+        Try it
+          clinotify test                  Fire a test "done" toast
+          clinotify test attention --label "Need input"
+
+        Skins (run with no value to list options; some are paid)
+          clinotify animation [<id>]      Crab animation
+          clinotify bubble [<id>]         Speech-bubble style       (alias: skin)
+          clinotify sound [<id>]          Notification sound
+
+        Tweaks
+          clinotify background [on|off]   Card/panel behind the toast
+          clinotify mute [on|off|toggle]  Mute this terminal's sound
+          clinotify scale [50%-200%]      Toast size
+          clinotify alerts [on|off]       Master on/off for all toasts
+          clinotify settings              Show every effective setting
+          clinotify license [status|activate-local <key>|reset]
+
+        Run `clinotify help --all` for hook/advanced commands.
+        """
+        print(text)
+        guard advanced else { return }
+        let advancedText = """
+
+        Advanced / hook plumbing (installed automatically; you rarely run these by hand)
           clinotify event --source <claude_code|codex> --type <done|attention>
           clinotify codex-event '<json>'
           clinotify dismiss [--session <id>]
+          clinotify name "<name>" | clinotify name --clear
+          clinotify stop
+          clinotify settings set <alerts|animation|sound> <on|off>
+          clinotify settings <animation|skin|frame|sound> claude-code [<id>] [--tty <tty>]
+          clinotify settings animate <on|off|toggle> [--tty <tty>]
+          clinotify settings show [--tty <tty>]
         """
-        print(text)
+        print(advancedText)
     }
 
     private static func printSettingsUsage() {
@@ -768,11 +982,4 @@ struct CLINotifyCLI {
         print(text)
     }
 
-    private static func printTestUsage() {
-        let text = """
-        Usage:
-          clinotify test claude-code [--type done|attention] [--label <text>]
-        """
-        print(text)
-    }
 }

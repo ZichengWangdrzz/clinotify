@@ -159,6 +159,69 @@
         font-weight: 600;
       }
 
+      .guide {
+        width: min(1120px, calc(100vw - 48px));
+        margin: 0 auto;
+        padding: 0 0 80px;
+      }
+
+      .guide h2 {
+        font-size: 30px;
+        margin: 44px 0 14px;
+      }
+
+      .steps {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+        gap: 16px;
+      }
+
+      .step {
+        border: 1px solid var(--line);
+        background: var(--panel);
+        border-radius: 8px;
+        padding: 18px;
+        font-size: 15px;
+        line-height: 1.5;
+        color: var(--muted);
+      }
+
+      .step b {
+        display: block;
+        margin-bottom: 8px;
+        color: var(--ink);
+      }
+
+      .guide code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        background: #eef0f2;
+        border-radius: 4px;
+        padding: 1px 5px;
+        font-size: 13px;
+        color: var(--ink);
+      }
+
+      pre.block {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        background: #101114;
+        color: #eef1f5;
+        border-radius: 8px;
+        padding: 16px 18px;
+        font-size: 13.5px;
+        line-height: 1.7;
+        overflow-x: auto;
+      }
+
+      pre.block .c {
+        color: #8b94a3;
+      }
+
+      .guide .foot {
+        font-size: 14px;
+        color: var(--muted);
+        margin-top: 30px;
+      }
+
       @media (max-width: 820px) {
         main {
           grid-template-columns: 1fr;
@@ -168,6 +231,10 @@
         h1 {
           font-size: 42px;
         }
+
+        .steps {
+          grid-template-columns: 1fr;
+        }
       }
     </style>
   </head>
@@ -175,11 +242,11 @@
     <main>
       <section>
         <h1>CLINotify</h1>
-        <p>A lightweight macOS menu-bar helper for Claude Code and Codex. Name a terminal session, walk away, and get a clear alert when it finishes or needs you.</p>
+        <p>A lightweight macOS menu-bar helper for Claude Code and Codex. Install it once, walk away, and get a clear desktop toast the moment your agent finishes or needs you.</p>
         <div class="actions">
-          <div class="command">brew install --cask clinotify</div>
-          <a class="button" href="#">Download DMG</a>
-          <a class="button" href="#">Buy license</a>
+          <div class="command">brew install --cask ZichengWangdrzz/clinotify/clinotify</div>
+          <a class="button" href="https://github.com/ZichengWangdrzz/clinotify/releases/latest">Download DMG</a>
+          <a class="button" href="#license">Buy license</a>
         </div>
       </section>
       <section class="product" aria-label="CLINotify product preview">
@@ -192,13 +259,71 @@
           <div class="bubble">Backend refactor<small>Done</small></div>
         </div>
         <div class="terminal">
-          <div>$ clinotify name "Backend refactor"</div>
+          <div>$ clinotify install</div>
+          <div>Installed CLINotify (production): clinotify CLI + Claude/Codex hooks.</div>
           <br>
-          <div>$ codex "finish the migration"</div>
-          <div>... running</div>
-          <div>agent-turn-complete</div>
+          <div>$ claude "finish the migration"</div>
+          <div>… working</div>
+          <div># walk away — you get a toast the moment it's done</div>
         </div>
       </section>
     </main>
+
+    <section class="guide" aria-label="User guide">
+      <h2>Quick start</h2>
+      <div class="steps">
+        <div class="step">
+          <b>1 · Install</b>
+          Homebrew: <code>brew install --cask ZichengWangdrzz/clinotify/clinotify</code> — or download the DMG and drag CLINotify to Applications.
+        </div>
+        <div class="step">
+          <b>2 · Launch</b>
+          Open CLINotify from Applications. It lives in the menu bar (look for the <code>CLI</code> item) — there's no Dock icon.
+        </div>
+        <div class="step">
+          <b>3 · Hook it up</b>
+          Run <code>clinotify install</code> (or use the menu → Install Hooks). New Claude Code / Codex sessions then register themselves automatically.
+        </div>
+        <div class="step">
+          <b>4 · Keep it running</b>
+          Run <code>clinotify autostart on</code> so the helper relaunches at login and across logout/reboot — that's what makes "walk away" survive a reboot. (<code>off</code> to stop, <code>status</code> to check.)
+        </div>
+      </div>
+
+      <h2>Commands you'll actually type</h2>
+      <pre class="block">clinotify install            <span class="c"># install the CLI + Claude Code &amp; Codex hooks</span>
+clinotify launch             <span class="c"># start the menu-bar app</span>
+clinotify autostart on       <span class="c"># keep it running across logout/reboot (off | status)</span>
+clinotify test               <span class="c"># fire a test toast (try: clinotify test attention --label "Need input")</span>
+clinotify status             <span class="c"># channel, helper state, and paths</span>
+clinotify list               <span class="c"># registered sessions</span>
+clinotify settings           <span class="c"># show every effective setting</span>
+clinotify uninstall          <span class="c"># remove the Claude/Codex hooks + the clinotify CLI symlink</span>
+clinotify help               <span class="c"># full list (help --all shows the hook internals)</span></pre>
+
+      <h2>Uninstall — just as easy</h2>
+      <pre class="block">clinotify uninstall          <span class="c"># removes the Claude/Codex hooks, the CLI symlink, and the autostart agent</span></pre>
+      <p>Then drag <strong>CLINotify</strong> out of Applications to the Trash. Installed with Homebrew? Run <code>clinotify uninstall</code> first, then <code>brew uninstall --cask clinotify</code> — the cask also quits the helper and removes the autostart agent. (Only want to stop auto-launch but keep the app? <code>clinotify autostart off</code>.)</p>
+
+      <h2>Make it yours — skins</h2>
+      <p>Four independent axes. Run a verb with no value to list the options (some are paid); pass an id to set it.</p>
+      <pre class="block">clinotify animation [&lt;id&gt;]   <span class="c"># crab animation  → right-hand-wave, squint-leg-wave</span>
+clinotify bubble    [&lt;id&gt;]   <span class="c"># bubble style    → windows-xp, classic-pixel   (alias: skin)</span>
+clinotify sound     [&lt;id&gt;]   <span class="c"># sound           → glass, ping, submarine, arcade-chime</span>
+
+clinotify background [on|off]    <span class="c"># show/hide the card behind the toast</span>
+clinotify mute [on|off|toggle]   <span class="c"># mute this terminal's sound</span>
+clinotify scale [50%-200%]       <span class="c"># toast size</span>
+clinotify alerts [on|off]        <span class="c"># master on/off for all toasts</span>
+clinotify license                <span class="c"># license status / activate-local &lt;key&gt; / reset</span></pre>
+
+      <h2 id="license">License &amp; pricing</h2>
+      <p>The core experience is free — everything above: the menu-bar helper, the hooks, and a toast on every Claude Code / Codex event. A few skins and sounds are a paid upgrade (CLINotify is a commercial product, licensed via Lemon Squeezy). Manage your license from the CLI:</p>
+      <pre class="block">clinotify license                        <span class="c"># show license status</span>
+clinotify license activate-local &lt;key&gt;   <span class="c"># activate a purchased key</span></pre>
+      <p>Paid skins show as <code>locked</code> until a key is activated. Purchase links are coming soon — the free core needs no license.</p>
+
+      <p class="foot">Works in every terminal — Ghostty, iTerm2, Apple Terminal, kitty, WezTerm, the VS Code terminal, and inside tmux — because the toast is its own screen window, never drawn inside the terminal.</p>
+    </section>
   </body>
 </html>

@@ -7,8 +7,8 @@ import Darwin
 /// Presents an agent event from inside the hook process. The hook has no controlling terminal (Claude
 /// Code) and must not target a terminal window, so it forwards the event to the long-running daemon
 /// over the Unix socket; the daemon renders the on-screen toast (and plays the sound). When the daemon
-/// is unreachable, it falls back to a macOS system notification (and plays the sound CLI-side) so a
-/// notification is never silently lost.
+/// is unreachable, the only fallback is a CLI-side sound — macOS system banner notifications are
+/// intentionally NOT used (CLINotify is a toast-only product).
 enum EventPresenter {
     static func present(_ event: AgentEvent, bypassRegistry: Bool = false) {
         let preferences = NotificationPreferencesStore().load()
@@ -18,15 +18,10 @@ enum EventPresenter {
             return // The daemon owns the toast and the sound on this path.
         }
 
-        // Fallback: no daemon running -> system notification + CLI-side sound.
+        // Fallback when no daemon is running: a CLI-side sound only. No system banner by design.
         if preferences.soundEnabled {
             playSound(preferences)
         }
-        postSystemNotification(
-            title: "CLINotify",
-            subtitle: event.displayLabel,
-            body: statusText(for: event.type)
-        )
     }
 
     /// Send the event to the daemon. Returns true only when the daemon acknowledged it (so the caller
@@ -37,13 +32,6 @@ enum EventPresenter {
             return false
         }
         return response.ok
-    }
-
-    static func statusText(for type: EventType) -> String {
-        switch type {
-        case .done: return "done"
-        case .attention: return "needs you"
-        }
     }
 
     static func playSound(_ preferences: NotificationPreferences) {
@@ -60,21 +48,5 @@ enum EventPresenter {
         process.standardError = FileHandle.nullDevice
         try? process.run()
         // Not awaited: fire-and-forget; the process exits shortly after the sound finishes.
-    }
-
-    static func postSystemNotification(title: String, subtitle: String, body: String) {
-        func escaped(_ s: String) -> String {
-            s.replacingOccurrences(of: "\\", with: "\\\\")
-                .replacingOccurrences(of: "\"", with: "\\\"")
-        }
-        let script = "display notification \"\(escaped(body))\" "
-            + "with title \"\(escaped(title))\" subtitle \"\(escaped(subtitle))\""
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-        process.arguments = ["-e", script]
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
-        try? process.run()
-        process.waitUntilExit()
     }
 }

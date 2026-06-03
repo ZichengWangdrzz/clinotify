@@ -11,7 +11,6 @@ final class EventRouter {
     private let licenseController: LicenseController
     private let soundManager: SoundManager
     private let overlayManager: OverlayManager
-    private let systemNotificationManager: SystemNotificationManager
 
     init(
         settings: SettingsStore,
@@ -19,8 +18,7 @@ final class EventRouter {
         overrideStore: SessionOverrideStore,
         licenseController: LicenseController,
         soundManager: SoundManager,
-        overlayManager: OverlayManager,
-        systemNotificationManager: SystemNotificationManager
+        overlayManager: OverlayManager
     ) {
         self.settings = settings
         self.registry = registry
@@ -28,7 +26,6 @@ final class EventRouter {
         self.licenseController = licenseController
         self.soundManager = soundManager
         self.overlayManager = overlayManager
-        self.systemNotificationManager = systemNotificationManager
     }
 
     func route(_ event: AgentEvent, bypassRegistry: Bool = false) {
@@ -77,10 +74,10 @@ final class EventRouter {
                 preferences: preferences
             )
         } else {
-            systemNotificationManager.deliver(
-                event: event,
-                label: capabilities.sessionBubble ? label : nil
-            )
+            // The toast is the only visual. macOS system banner notifications are intentionally
+            // disabled, so when the overlay is off there's no banner fallback — the sound above
+            // (if enabled) is the cue.
+            Self.logger.debug("Overlay disabled for this event; no system banner (disabled by design).")
         }
     }
 

@@ -10,15 +10,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let licenseController = LicenseController()
     private let soundManager = SoundManager()
     private let overlayManager = OverlayManager()
-    private let systemNotificationManager = SystemNotificationManager()
     private lazy var eventRouter = EventRouter(
         settings: settings,
         registry: registry,
         overrideStore: overrideStore,
         licenseController: licenseController,
         soundManager: soundManager,
-        overlayManager: overlayManager,
-        systemNotificationManager: systemNotificationManager
+        overlayManager: overlayManager
     )
     private lazy var ipcServer = IPCServer(
         registry: registry,

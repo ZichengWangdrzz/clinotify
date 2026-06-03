@@ -27,6 +27,15 @@ public final class Installer {
     private var claudeDismissCommand: String { "\(cli) dismiss" }
     private var codexNotifyLine: String { "notify = [\"\(cli)\", \"codex-event\"]" }
 
+    /// Interactive-selection tools: ones that present a choice and then block waiting for the user.
+    /// `AskUserQuestion` (a question with options) and `ExitPlanMode` (plan approval) are the two.
+    /// They are special because (1) showing one does NOT fire the `Notification` hook — only the 60s
+    /// `idle_prompt` does (anthropics/claude-code#13830) — and (2) answering one fires `PostToolUse`,
+    /// NOT `UserPromptSubmit`. So without a PreToolUse/PostToolUse pair the toast neither appears
+    /// promptly at the choice nor slides out when the user answers. The string is a hook matcher,
+    /// matched against the exact tool name; `|` means OR (case-sensitive).
+    private let claudeSelectionMatcher = "AskUserQuestion|ExitPlanMode"
+
     public func install() throws {
         try installCLISymlink()
         try installClaudeHooks()
@@ -63,6 +72,20 @@ public final class Installer {
         hooks["SessionEnd"] = mergedClaudeHookArray(
             existing: hooks["SessionEnd"] as? [[String: Any]] ?? [],
             command: claudeDismissCommand
+        )
+        // Interactive selection prompts (AskUserQuestion / ExitPlanMode) don't fire Notification when
+        // shown, and answering one is a PostToolUse rather than a UserPromptSubmit. So show the toast
+        // on PreToolUse (the instant the choice appears) and dismiss it on PostToolUse (the instant
+        // the user answers) — both scoped to those tools via the matcher.
+        hooks["PreToolUse"] = mergedClaudeHookArray(
+            existing: hooks["PreToolUse"] as? [[String: Any]] ?? [],
+            command: claudeAttentionCommand,
+            matcher: claudeSelectionMatcher
+        )
+        hooks["PostToolUse"] = mergedClaudeHookArray(
+            existing: hooks["PostToolUse"] as? [[String: Any]] ?? [],
+            command: claudeDismissCommand,
+            matcher: claudeSelectionMatcher
         )
         root["hooks"] = hooks
         try writeJSONObject(root, to: url)
@@ -104,8 +127,27 @@ public final class Installer {
             command: claudeDismissCommand
             )
         )
+        setOrRemove(
+            key: "PreToolUse",
+            in: &hooks,
+            value: removeClaudeCommand(
+            from: hooks["PreToolUse"] as? [[String: Any]] ?? [],
+            command: claudeAttentionCommand
+            )
+        )
+        setOrRemove(
+            key: "PostToolUse",
+            in: &hooks,
+            value: removeClaudeCommand(
+            from: hooks["PostToolUse"] as? [[String: Any]] ?? [],
+            command: claudeDismissCommand
+            )
+        )
         root["hooks"] = hooks
         try writeJSONObject(root, to: url)
+        // Surgical removal preserves hooks the user added after install, so we never restore the full
+        // backup — just clear the orphan so uninstall leaves no `*.clinotify.bak` behind.
+        try? fileManager.removeItem(at: url.appendingPathExtension("clinotify.bak"))
     }
 
     public func installCodexNotify() throws {
@@ -135,6 +177,8 @@ public final class Installer {
         if fileManager.fileExists(atPath: backupURL.path) {
             try? fileManager.removeItem(at: url)
             try fileManager.copyItem(at: backupURL, to: url)
+            // Backup consumed: remove it so uninstall leaves no orphaned `*.clinotify.bak`.
+            try? fileManager.removeItem(at: backupURL)
             return
         }
 
@@ -165,21 +209,26 @@ public final class Installer {
 
     private func uninstallCLISymlink() throws {
         let linkURL = home(".local/bin/\(channel.cliName)")
+        let backupURL = linkURL.appendingPathExtension("clinotify.bak")
         guard fileManager.fileExists(atPath: linkURL.path),
               let destination = try? fileManager.destinationOfSymbolicLink(atPath: linkURL.path),
               destination == cliURLProvider()?.path else {
             return
         }
         try fileManager.removeItem(at: linkURL)
+        // If install() backed up a pre-existing symlink, restore the user's original, then clear the
+        // backup so no orphaned `*.clinotify.bak` is left behind.
+        try? fileManager.copyItem(at: backupURL, to: linkURL)
+        try? fileManager.removeItem(at: backupURL)
     }
 
-    private func mergedClaudeHookArray(existing: [[String: Any]], command: String) -> [[String: Any]] {
+    private func mergedClaudeHookArray(existing: [[String: Any]], command: String, matcher: String = "") -> [[String: Any]] {
         if containsClaudeCommand(existing, command: command) {
             return existing
         }
         var result = existing
         result.append([
-            "matcher": "",
+            "matcher": matcher,
             "hooks": [
                 [
                     "type": "command",
