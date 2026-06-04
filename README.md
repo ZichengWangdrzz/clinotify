@@ -156,6 +156,12 @@ Releases are distributed two ways from the same signed, notarized, stapled DMG:
 
 Tagging a `v*` tag triggers `.github/workflows/release.yml`, which builds, signs+notarizes, publishes the release, and generates the cask. See that workflow for the repo secrets it requires.
 
+## Support
+
+CLINotify is built by one indie hacker — [**@devpsycho_ai**](https://x.com/devpsycho_ai) on X. If it saves you from babysitting your terminal, you can say thanks:
+
+> ☕ **[Buy me a coffee on Ko-fi](https://ko-fi.com/devpsycho)** — a coffee keeps the crab waving.
+
 ## License
 
 CLINotify is licensed under the [Elastic License 2.0](LICENSE) (`Elastic-2.0`) — a source-available license. The core app is free to use, copy, modify, and redistribute. You may **not** circumvent the license-key functionality that gates paid skins/sounds, and you may not offer CLINotify as a hosted/managed service. Copyright © 2026 devpsycho.
