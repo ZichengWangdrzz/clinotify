@@ -36,6 +36,10 @@ jobs:
     # macos-15 ships Xcode 16 / Swift 6 by default (Package.swift needs swift-tools-version: 6.0);
     # macos-14 defaults to Swift 5.10 and the build step would fail.
     runs-on: macos-15
+    # Cap the whole job so a stalled notary submission (notarytool --wait, esp. an account's first
+    # submissions) fails in ~2h instead of hanging to the 6h default. Pairs with --timeout 45m in
+    # scripts/sign-notarize.sh (two notarize calls -> ~90m worst case + build).
+    timeout-minutes: 120
     steps:
       - name: Checkout
         uses: actions/checkout@v4

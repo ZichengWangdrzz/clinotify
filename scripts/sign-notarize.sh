@@ -55,9 +55,13 @@ fi
 # Invalid (only tool/transport failures are nonzero), so the status must be checked explicitly.
 notarize() {
   local target="$1" out status
+  # --wait blocks until Apple returns a verdict; WITHOUT --timeout it can hang on a notary backlog
+  # (notably an account's first-ever submissions) up to the CI job's hard cap. --timeout bounds the
+  # client wait so a stalled submission fails cleanly here instead of hanging for hours. (It only bounds
+  # OUR wait — Apple keeps processing — so a timeout means "re-run", not "rejected".)
   out="$(xcrun notarytool submit "$target" \
     --apple-id "$APPLE_ID" --team-id "$TEAM_ID" --password "$PASSWORD" \
-    --wait --output-format json)"
+    --wait --timeout 45m --output-format json)"
   echo "$out"
   status="$(printf '%s' "$out" | /usr/bin/python3 -c 'import json,sys; print(json.load(sys.stdin).get("status",""))')"
   if [[ "$status" != "Accepted" ]]; then
