@@ -82,7 +82,12 @@ final class MenuBarController: NSObject {
     @objc private func installHooks() {
         do {
             try installer.install()
-            showAlert(message: "Hooks installed.")
+            // A Finder-launched app gets a minimal PATH that can't see the user's shell, so we can't tell
+            // whether ~/.local/bin is actually on their PATH — give an informational note rather than a
+            // (always-firing) warning, so the `clinotify` CLI isn't a mysterious "command not found".
+            let cli = AppChannel.current.cliName
+            let bin = PathEnvironment.binDirectory().path
+            showAlert(message: "Hooks installed.\n\nThe \(cli) command is at \(bin)/\(cli). If `\(cli)` isn't found in your terminal, add \(bin) to your PATH.")
         } catch {
             showAlert(message: "Install failed: \(error.localizedDescription)")
         }

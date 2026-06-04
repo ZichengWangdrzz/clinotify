@@ -44,6 +44,17 @@ public enum ApplicationPaths {
         applicationSupportDirectory.appendingPathComponent(sessionOverridesFilename)
     }
 
+    /// The NSUserDefaults-backed preferences plist macOS writes for a channel's app
+    /// (`~/Library/Preferences/<bundleid>.plist`). The daemon's SettingsStore uses `UserDefaults.standard`,
+    /// so a full uninstall (`--purge`) must delete this too — purging the Application Support JSON alone
+    /// leaves it behind (screen/sound-name keys would survive a reinstall).
+    public static func preferencesPlistURL(
+        for channel: AppChannel,
+        home: URL = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
+    ) -> URL {
+        home.appendingPathComponent("Library/Preferences/\(channel.bundleIdentifier).plist")
+    }
+
     public static func ensureApplicationSupportDirectory() throws {
         try FileManager.default.createDirectory(
             at: applicationSupportDirectory,

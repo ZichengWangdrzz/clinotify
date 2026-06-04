@@ -104,6 +104,15 @@ struct CLINotifyCLI {
         do {
             try Installer(cliURLProvider: { selfURL }).install()
             print("Installed CLINotify (\(AppChannel.current.rawValue)): \(AppChannel.current.cliName) CLI + Claude/Codex hooks.")
+            // Install only created the ~/.local/bin symlink; it can't edit the user's shell profile. If
+            // that dir isn't on PATH the `clinotify` command is "not found", so surface the one-liner fix.
+            if let hint = PathEnvironment.pathExportHint(
+                for: PathEnvironment.binDirectory(),
+                pathValue: ProcessInfo.processInfo.environment["PATH"] ?? "",
+                command: AppChannel.current.cliName
+            ) {
+                print(hint)
+            }
         } catch {
             printError("Install failed: \(error.localizedDescription)")
         }
@@ -136,6 +145,11 @@ struct CLINotifyCLI {
         let fileManager = FileManager.default
         if purge {
             try? fileManager.removeItem(at: ApplicationPaths.applicationSupportDirectory)
+            // Also clear the NSUserDefaults the daemon's SettingsStore writes via UserDefaults.standard
+            // (~/Library/Preferences/<bundleid>.plist). The App Support purge above doesn't touch it, so
+            // without this a reinstall would silently inherit the old screen/sound-name preferences.
+            UserDefaults.standard.removePersistentDomain(forName: channel.bundleIdentifier)
+            try? fileManager.removeItem(at: ApplicationPaths.preferencesPlistURL(for: channel))
         } else {
             try? fileManager.removeItem(atPath: ApplicationPaths.socketPath)
             try? fileManager.removeItem(atPath: ApplicationPaths.lockPath)
