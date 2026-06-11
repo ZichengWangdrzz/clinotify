@@ -3,8 +3,17 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>CLINotify &mdash; Desktop toasts for Claude Code and Codex</title>
-<meta name="description" content="CLINotify is a macOS menu-bar helper that pops a pixel-art desktop toast the moment your CLI coding agent finishes a task or needs your input. Install once, walk away." />
+<title>CLINotify &mdash; Desktop toasts for Claude Code</title>
+<meta name="description" content="CLINotify is a macOS menu-bar helper that pops a pixel-art desktop toast the moment Claude Code finishes a task or needs your input. Install once, walk away. (Codex support coming soon.)" />
+<meta name="theme-color" content="#f6f7f8" />
+<meta property="og:type" content="website" />
+<meta property="og:title" content="CLINotify &mdash; Desktop toasts for Claude Code" />
+<meta property="og:description" content="A macOS menu-bar helper that pops a pixel-art desktop toast the moment Claude Code finishes a task or needs your input. Install once, walk away." />
+<meta property="og:url" content="https://zichengwangdrzz.github.io/clinotify/" />
+<meta property="og:image" content="https://zichengwangdrzz.github.io/clinotify/demo-poster.jpg" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:site" content="@devpsycho_ai" />
+<meta name="twitter:creator" content="@devpsycho_ai" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&amp;family=VT323&amp;family=IBM+Plex+Mono:wght@400;500;600;700&amp;display=swap" rel="stylesheet" />
@@ -50,6 +59,9 @@
   }
   img, svg, video { image-rendering: auto; }
   a { color: var(--blue); }
+  ::selection { background: var(--yellow); color: var(--ink); }
+  h1, h2, h3 { text-wrap: balance; }
+  p { text-wrap: pretty; }
 
   /* visually-hidden but available to assistive tech */
   .sr-only {
@@ -93,7 +105,7 @@
     margin: 0 auto;
     padding: 0 20px;
   }
-  section { padding: 64px 0; position: relative; }
+  section { padding: clamp(44px, 8vw, 72px) 0; position: relative; scroll-margin-top: 24px; }
 
   /* ===================== REVEAL ===================== */
   .reveal {
@@ -195,6 +207,154 @@
     color: #3a1c02;
   }
 
+  /* ===================== LIVE STATS PILLS ===================== */
+  .stat-pills {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+  .stat-pills .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 13px;
+    line-height: 1;
+    color: var(--ink);
+    background: var(--paper);
+    border: var(--border-3);
+    box-shadow: var(--shadow-press);
+    padding: 9px 13px;
+    text-decoration: none;
+    font-variant-numeric: tabular-nums;
+    transition: transform 0.08s steps(2), box-shadow 0.08s steps(2);
+  }
+  a.pill:hover, a.pill:focus-visible {
+    transform: translate(1px, 1px);
+    box-shadow: 1px 1px 0 var(--ink);
+    outline: none;
+  }
+  a.pill:focus-visible { outline: 3px dashed var(--ink); outline-offset: 3px; }
+  .stat-pills .pill .tag {
+    font-family: var(--vt);
+    font-size: 17px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    background: var(--ink);
+    color: var(--paper);
+    padding: 2px 7px;
+  }
+  .stat-pills .pill .val { color: var(--ink); }
+  .stat-pills .pill.ver .val { color: var(--green-dark); }
+  .stat-pills .pill.dl .val { color: var(--blue); }
+  .stat-pills .pill .pulse {
+    width: 9px; height: 9px;
+    background: var(--green);
+    border: 2px solid var(--ink);
+    flex: none;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.25; }
+  }
+  .stat-pills .pill .pulse { animation: pulse 2s steps(2) infinite; }
+  .stat-pills .pill.dl { transition: background 0.45s ease; }
+  .stat-pills .pill.dl.bump { background: var(--green-glow); }
+
+  /* ===================== CODEX NOTICE ===================== */
+  .codex-note {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 13px;
+    background: var(--yellow);
+    border: var(--border-3);
+    box-shadow: var(--shadow-press);
+    padding: 9px 13px;
+    margin-bottom: 22px;
+    max-width: 100%;
+  }
+  .codex-note .warn {
+    font-family: var(--vt);
+    font-size: 17px;
+    background: var(--ink);
+    color: var(--yellow);
+    padding: 2px 7px;
+    flex: none;
+    letter-spacing: 1px;
+  }
+
+  /* ===================== FOUNDER ===================== */
+  .founder-card {
+    display: flex;
+    align-items: center;
+    gap: 26px;
+    background: var(--cream);
+    border: var(--border);
+    box-shadow: var(--shadow);
+    padding: 28px 32px;
+    max-width: 640px;
+    margin: 0 auto;
+  }
+  .founder-card .avatar-frame {
+    flex: none;
+    border: var(--border-3);
+    box-shadow: var(--shadow-sm);
+    background: var(--teal);
+    padding: 5px;
+    line-height: 0;
+  }
+  .founder-card .avatar {
+    width: 96px; height: 96px;
+    display: block;
+    object-fit: cover;
+    image-rendering: auto;
+  }
+  .founder-card .fname {
+    font-family: var(--pixel);
+    font-size: 17px;
+    margin-bottom: 8px;
+    text-shadow: 3px 3px 0 var(--teal);
+  }
+  .founder-card .frole {
+    font-family: var(--vt);
+    font-size: 21px;
+    letter-spacing: 1px;
+    margin-bottom: 12px;
+  }
+  .x-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--paper);
+    background: var(--ink);
+    border: var(--border-3);
+    box-shadow: var(--shadow-press);
+    padding: 9px 14px;
+    text-decoration: none;
+    line-height: 1;
+    transition: transform 0.08s steps(2), box-shadow 0.08s steps(2);
+  }
+  .x-link:hover, .x-link:focus-visible {
+    transform: translate(1px, 1px);
+    box-shadow: 1px 1px 0 var(--ink);
+    color: var(--yellow);
+    outline: none;
+  }
+  .x-link:focus-visible { outline: 3px dashed var(--ink); outline-offset: 3px; }
+  .x-link .xlogo { width: 15px; height: 15px; fill: currentColor; flex: none; }
+  @media (max-width: 480px) {
+    .founder-card { flex-direction: column; text-align: center; }
+    .founder-card .finfo { display: flex; flex-direction: column; align-items: center; }
+  }
+
   /* ===================== HERO ===================== */
   #hero { padding-top: 36px; }
   .topbar {
@@ -232,7 +392,7 @@
   }
   h1.wordmark {
     font-family: var(--pixel);
-    font-size: 44px;
+    font-size: clamp(24px, 5.4vw, 44px);
     line-height: 1.25;
     color: var(--ink);
     text-shadow: 5px 5px 0 var(--orange), 9px 9px 0 var(--ink);
@@ -390,7 +550,7 @@
   /* ===================== SECTION HEADERS ===================== */
   .sec-head {
     font-family: var(--pixel);
-    font-size: 20px;
+    font-size: clamp(16px, 2.6vw, 20px);
     line-height: 1.5;
     margin-bottom: 10px;
     color: var(--ink);
@@ -659,8 +819,6 @@
   /* ===================== RESPONSIVE ===================== */
   @media (max-width: 820px) {
     .hero-grid { grid-template-columns: 1fr; }
-    h1.wordmark { font-size: 32px; }
-    .sec-head { font-size: 16px; }
     .step { grid-template-columns: 48px 1fr; gap: 12px; }
     .step .num { width: 44px; height: 44px; font-size: 14px; }
     .connector { grid-template-columns: 48px 1fr; }
@@ -668,10 +826,11 @@
     .topnav { width: 100%; justify-content: flex-start; flex-wrap: wrap; }
   }
   @media (max-width: 480px) {
-    h1.wordmark { font-size: 24px; text-shadow: 3px 3px 0 var(--orange), 6px 6px 0 var(--ink); }
-    section { padding: 44px 0; }
+    h1.wordmark { text-shadow: 3px 3px 0 var(--orange), 6px 6px 0 var(--ink); }
     .brandmark { font-size: 14px; }
     .bubble { min-width: 0; width: 100%; }
+    .stat-pills { width: 100%; }
+    .stat-pills .pill { flex: 1; justify-content: center; }
   }
 
   /* ===================== REDUCED MOTION ===================== */
@@ -695,8 +854,10 @@
   <a class="pdot" href="#demo" data-sec="demo" aria-label="Demo video"><span class="lbl" aria-hidden="true">Demo</span></a>
   <a class="pdot" href="#setup" data-sec="setup" aria-label="Setup flow"><span class="lbl" aria-hidden="true">Setup</span></a>
   <a class="pdot" href="#commands" data-sec="commands" aria-label="Commands"><span class="lbl" aria-hidden="true">Commands</span></a>
+  <a class="pdot" href="#update" data-sec="update" aria-label="Updating"><span class="lbl" aria-hidden="true">Update</span></a>
   <a class="pdot" href="#uninstall" data-sec="uninstall" aria-label="Uninstall"><span class="lbl" aria-hidden="true">Uninstall</span></a>
   <a class="pdot" href="#everyterminal" data-sec="everyterminal" aria-label="Every terminal"><span class="lbl" aria-hidden="true">Terminals</span></a>
+  <a class="pdot" href="#founder" data-sec="founder" aria-label="Founder"><span class="lbl" aria-hidden="true">Founder</span></a>
   <a class="pdot" href="#coffee-sec" data-sec="coffee-sec" aria-label="Buy me a coffee"><span class="lbl" aria-hidden="true">Coffee</span></a>
 </nav>
 
@@ -709,8 +870,9 @@
       <nav class="topnav" aria-label="Primary">
         <a href="#setup">Setup</a>
         <a href="#commands">Commands</a>
+        <a href="#update">Update</a>
         <a href="https://github.com/ZichengWangdrzz/clinotify">GitHub</a>
-        <a href="https://x.com/devpsycho_ai">X</a>
+        <a href="https://x.com/devpsycho_ai" aria-label="devpsycho_ai on X" style="display:inline-flex;align-items:center;"><svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231 5.45-6.231zm-1.161 17.52h1.833L7.084 4.126H5.117l11.966 15.644z"/></svg></a>
       </nav>
     </div>
 
@@ -718,7 +880,21 @@
       <div>
         <span class="kicker reveal">Pixel toasts for your terminal</span>
         <h1 class="wordmark reveal d1">CLINotify</h1>
-        <p class="tagline reveal d2">Desktop toasts for Claude Code and Codex. Install once, walk away.</p>
+        <p class="tagline reveal d2">Desktop toasts for Claude&nbsp;Code. Install once, walk away.</p>
+
+        <p class="codex-note reveal d2"><span class="warn" aria-hidden="true">HEADS UP</span><span>Codex isn't supported yet &mdash; Claude Code only for now. Codex support is on the way.</span></p>
+
+        <div class="stat-pills reveal d2" id="live-stats" aria-live="polite">
+          <a class="pill ver" id="pill-version" href="https://github.com/ZichengWangdrzz/clinotify/releases/latest" aria-label="Latest release on GitHub">
+            <span class="pulse" aria-hidden="true"></span>
+            <span class="tag">Latest</span>
+            <span class="val" id="stat-version">&hellip;</span>
+          </a>
+          <span class="pill dl" id="pill-downloads">
+            <span class="tag">Downloads</span>
+            <span class="val" id="stat-downloads">&hellip;</span>
+          </span>
+        </div>
 
         <div class="hero-actions reveal d3">
           <a class="btn primary" href="https://github.com/ZichengWangdrzz/clinotify/releases/latest" aria-label="Download the CLINotify DMG from GitHub releases">
@@ -807,7 +983,7 @@
     <div class="reveal">
       <span class="kicker">One-stop setup</span>
       <h2 class="sec-head">Four steps. Walk away.</h2>
-      <p class="sec-sub">Set it up once and every new Claude Code or Codex session is covered. One toast per session.</p>
+      <p class="sec-sub">Set it up once and every new Claude Code session is covered. One toast per session.</p>
     </div>
 
     <div class="steps">
@@ -836,7 +1012,7 @@
             <code>clinotify install</code>
             <button class="copy" type="button" data-copy="clinotify install" aria-label="Copy the hook-up command">COPY</button>
           </div>
-          <p class="note">Or use the menu bar &rarr; Install Hooks. New Claude Code / Codex sessions auto-register.</p>
+          <p class="note">Or use the menu bar &rarr; Install Hooks. New Claude Code sessions auto-register.</p>
         </div>
       </div>
       <div class="connector reveal" aria-hidden="true"><i></i></div>
@@ -851,7 +1027,7 @@
             <code>clinotify autostart on</code>
             <button class="copy" type="button" data-copy="clinotify autostart on" aria-label="Copy the autostart command">COPY</button>
           </div>
-          <p class="note">Toggle it any time: <code class="chip">off</code> | <code class="chip">status</code>.</p>
+          <p class="note">Toggle it any time: <code class="chip">off</code> | <code class="chip">status</code>. Keeping autostart on also means upgrades take effect immediately &mdash; the new version relaunches itself.</p>
         </div>
       </div>
       <div class="connector reveal" aria-hidden="true"><i></i></div>
@@ -879,7 +1055,7 @@
       <div class="cb-bar" aria-hidden="true">
         <span class="light r"></span><span class="light y"></span><span class="light g"></span><span class="light b"></span>
       </div>
-<pre><code><span class="c">clinotify install</span>        <span class="cm"># register Claude Code + Codex hooks</span>
+<pre><code><span class="c">clinotify install</span>        <span class="cm"># register Claude Code hooks</span>
 <span class="c">clinotify launch</span>         <span class="cm"># start the menu-bar helper now</span>
 <span class="c">clinotify autostart on</span>   <span class="cm"># relaunch at login + across reboots</span>
 <span class="c">clinotify test</span>           <span class="cm"># fire a sample toast to check it works</span>
@@ -888,6 +1064,24 @@
 <span class="c">clinotify settings</span>       <span class="cm"># open preferences (sound, position, skin)</span>
 <span class="c">clinotify uninstall</span>      <span class="cm"># remove hooks, symlink + autostart agent</span>
 <span class="c">clinotify help</span>           <span class="cm"># show all commands</span></code></pre>
+    </div>
+  </section>
+
+  <!-- ============ UPDATE ============ -->
+  <section id="update">
+    <div class="reveal">
+      <span class="kicker">Stay current</span>
+      <h2 class="sec-head">Updating</h2>
+      <p class="sec-sub">One command. Your hooks, skins, sounds and autostart all survive the upgrade.</p>
+    </div>
+    <div class="card reveal from-right d1">
+      <p style="font-weight:600; margin-bottom:14px;">Upgrade to the latest release:</p>
+      <div class="stepcmd">
+        <code>brew update &amp;&amp; brew upgrade --cask clinotify</code>
+        <button class="copy" type="button" data-copy="brew update && brew upgrade --cask clinotify" aria-label="Copy the upgrade command">COPY</button>
+      </div>
+      <p class="note">With <code class="chip">clinotify autostart on</code> the new version relaunches itself the moment the upgrade finishes &mdash; nothing else to do. Without autostart, run <code class="chip">clinotify launch</code> once after upgrading.</p>
+      <p class="note">Upgrading from v0.1.0 or v0.1.1? Run <code class="chip">clinotify install</code> once after the upgrade (one-time hook migration), and expect a single password prompt during that upgrade only.</p>
     </div>
   </section>
 
@@ -903,7 +1097,7 @@
         <code>clinotify uninstall</code>
         <button class="copy" type="button" data-copy="clinotify uninstall" aria-label="Copy the uninstall command">COPY</button>
       </div>
-      <p class="note">Removes the Claude / Codex hooks, the CLI symlink, and the autostart agent.</p>
+      <p class="note">Removes the Claude Code hooks, the CLI symlink, and the autostart agent.</p>
       <p style="font-weight:600; margin:16px 0 8px;">Then drag CLINotify out of Applications &mdash; or:</p>
       <div class="stepcmd">
         <code>brew uninstall --cask clinotify</code>
@@ -925,6 +1119,27 @@
         <span class="term-chip">WezTerm</span>
         <span class="term-chip">VS Code terminal</span>
         <span class="term-chip">tmux</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ FOUNDER ============ -->
+  <section id="founder">
+    <div class="reveal" style="text-align:center;">
+      <span class="kicker">Meet the maker</span>
+      <h2 class="sec-head" style="text-shadow:3px 3px 0 var(--orange);">Built by one indie hacker</h2>
+    </div>
+    <div class="founder-card reveal zoom d1">
+      <div class="avatar-frame">
+        <img class="avatar" src="https://unavatar.io/x/devpsycho_ai?fallback=https%3A%2F%2Fgithub.com%2FZichengWangdrzz.png" onerror="this.onerror=null;this.src='https://github.com/ZichengWangdrzz.png';" alt="Portrait of devpsycho, founder of CLINotify" width="96" height="96" loading="lazy" decoding="async" />
+      </div>
+      <div class="finfo">
+        <h3 class="fname">devpsycho</h3>
+        <p class="frole">Founder &mdash; building CLINotify in public, one pixel at a time.</p>
+        <a class="x-link" href="https://x.com/devpsycho_ai" aria-label="Follow @devpsycho_ai on X">
+          <svg class="xlogo" viewBox="0 0 24 24" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231 5.45-6.231zm-1.161 17.52h1.833L7.084 4.126H5.117l11.966 15.644z"/></svg>
+          @devpsycho_ai
+        </a>
       </div>
     </div>
   </section>
@@ -976,11 +1191,11 @@
   <div class="wrap">
     <div class="flinks">
       <a href="https://github.com/ZichengWangdrzz/clinotify">GitHub</a>
-      <a href="https://x.com/devpsycho_ai" aria-label="CLINotify on X">X</a>
+      <a href="https://x.com/devpsycho_ai" aria-label="devpsycho_ai on X" style="display:inline-flex;align-items:center;gap:7px;"><svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231 5.45-6.231zm-1.161 17.52h1.833L7.084 4.126H5.117l11.966 15.644z"/></svg>@devpsycho_ai</a>
       <a href="https://ko-fi.com/devpsycho" target="_blank" rel="noopener">Buy me a coffee</a>
     </div>
-    <p class="madewith">made with mono and pixels</p>
-    <p class="copyr">&copy; 2026 CLINotify</p>
+    <p class="madewith">made with mono and pixels &mdash; founder: <a href="https://x.com/devpsycho_ai" style="color:var(--teal);">@devpsycho_ai</a></p>
+    <p class="copyr">&copy; 2026 CLINotify &middot; Claude Code today, Codex soon</p>
   </div>
 </footer>
 
@@ -1132,6 +1347,66 @@
       var sec = document.getElementById(k);
       if (sec) io.observe(sec);
     });
+  })();
+
+  /* ---------- LIVE RELEASE STATS (version + download count) ---------- */
+  (function liveStats() {
+    var verEl = document.getElementById("stat-version");
+    var dlEl = document.getElementById("stat-downloads");
+    var dlPill = document.getElementById("pill-downloads");
+    if (!verEl || !dlEl || !window.fetch) return;
+
+    var API = "https://api.github.com/repos/ZichengWangdrzz/clinotify/releases?per_page=100";
+    var POLL_MS = 120000; /* 2 min — stays well under GitHub's 60 req/h anonymous limit */
+    var shown = null;     /* download count currently displayed */
+    var tweenId = 0;      /* cancels an in-flight tween when a fresh value lands */
+
+    function fmt(n) { return n.toLocaleString("en-US"); }
+
+    /* silky count-up: rAF + easeOutQuart so digits glide, never jump */
+    function tweenTo(target) {
+      var from = shown === null ? Math.max(0, target - Math.min(target, 80)) : shown;
+      shown = target;
+      if (reduced || from === target) { dlEl.textContent = fmt(target); return; }
+      var id = ++tweenId;
+      var dur = Math.min(1600, 500 + Math.abs(target - from) * 12);
+      var t0 = null;
+      function frame(ts) {
+        if (id !== tweenId) return;
+        if (t0 === null) t0 = ts;
+        var p = Math.min(1, (ts - t0) / dur);
+        var eased = 1 - Math.pow(1 - p, 4);
+        dlEl.textContent = fmt(Math.round(from + (target - from) * eased));
+        if (p < 1) requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+      if (dlPill && from !== target) {
+        dlPill.classList.add("bump");
+        setTimeout(function () { dlPill.classList.remove("bump"); }, 900);
+      }
+    }
+
+    function refresh() {
+      fetch(API, { headers: { Accept: "application/vnd.github+json" } })
+        .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error("HTTP " + r.status)); })
+        .then(function (releases) {
+          if (!Array.isArray(releases) || !releases.length) return;
+          var stable = releases.filter(function (r) { return !r.draft && !r.prerelease; });
+          if (stable.length) verEl.textContent = stable[0].tag_name;
+          var total = 0;
+          releases.forEach(function (r) {
+            (r.assets || []).forEach(function (a) { total += a.download_count || 0; });
+          });
+          tweenTo(total);
+        })
+        .catch(function () {
+          /* first load failed (offline / rate-limited): show a calm dash, keep polling */
+          if (shown === null) { verEl.textContent = "—"; dlEl.textContent = "—"; }
+        });
+    }
+
+    refresh();
+    setInterval(refresh, POLL_MS);
   })();
 })();
 </script>
