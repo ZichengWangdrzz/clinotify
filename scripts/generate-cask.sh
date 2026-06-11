@@ -41,16 +41,25 @@ cask "clinotify" do
   # Put the bundled CLI on Homebrew's PATH so users can run "clinotify install" right after install.
   binary "#{appdir}/CLINotify.app/Contents/MacOS/clinotify"
 
-  # Stop the running menu-bar daemon AND tear down the autostart LaunchAgent (label == bundle id,
-  # written by "clinotify autostart on" with KeepAlive) BEFORE Homebrew deletes the app — otherwise
-  # launchd keeps relaunching the now-missing binary. (launchctl before quit per cask conventions.)
-  # Use trash: not delete: for the plist. It lives in the user's own home and needs no root, but
-  # Homebrew's delete: always shells out to sudo rm -- which would prompt for a password on EVERY
-  # upgrade/uninstall (and fails outright in a non-interactive shell). trash: runs as the user.
-  # (No backticks/dollar signs in these comments: this heredoc is unquoted, so they would execute.)
+  # Stop the running menu-bar daemon during an upgrade/uninstall (launchctl boot-out before quit, per
+  # cask conventions) so launchd does not thrash relaunching the briefly-missing binary while the app
+  # is swapped. Do NOT remove the autostart LaunchAgent plist here: this stanza ALSO runs on every
+  # upgrade, and deleting the plist each upgrade is exactly what made users lose their "autostart on"
+  # setting. The plist is a user artifact (written by "clinotify autostart on") — it is removed only on
+  # full removal (zap, below) or by "clinotify uninstall" (see caveats). Leaving it = autostart survives
+  # upgrades.
   uninstall launchctl: "app.clinotify.helper",
-            quit:      "app.clinotify.helper",
-            trash:     "~/Library/LaunchAgents/app.clinotify.helper.plist"
+            quit:      "app.clinotify.helper"
+
+  # After an install/upgrade, relaunch the menu-bar app IF the user had autostart enabled (its plist is
+  # present), so an upgrade does not leave them with no running daemon until the next login. Non-fatal.
+  # (No backticks or dollar signs here: this heredoc is unquoted so they would execute; #{...} is fine.)
+  postflight do
+    agent_plist = "#{Dir.home}/Library/LaunchAgents/app.clinotify.helper.plist"
+    if File.exist?(agent_plist)
+      system_command "/usr/bin/open", args: ["-g", "#{appdir}/CLINotify.app"], must_succeed: false
+    end
+  end
 
   # Deep clean (alphabetized per cask conventions). Globs cover both production (CLINotify) and any
   # dev (CLINotify-Dev) state a developer build may have left, plus the autostart plist for --zap.
