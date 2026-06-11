@@ -20,12 +20,29 @@ public final class Installer {
         self.cliURLProvider = cliURLProvider
     }
 
-    /// CLI name for this channel (`clinotify` or `clinotify-dev`).
+    /// CLI name for this channel (`clinotify` or `clinotify-dev`). Used only to MATCH the legacy v0.1.0
+    /// hook lines (which referenced the bare name) so an upgrade migrates them to the absolute path.
     private var cli: String { channel.cliName }
-    private var claudeDoneCommand: String { "\(cli) event --source claude_code --type done" }
-    private var claudeAttentionCommand: String { "\(cli) event --source claude_code --type attention" }
-    private var claudeDismissCommand: String { "\(cli) dismiss" }
-    private var codexNotifyLine: String { "notify = [\"\(cli)\", \"codex-event\"]" }
+    /// Absolute path to the installed CLI symlink (`~/.local/bin/<cli>`). Hook subprocesses spawned by
+    /// Claude Code / Codex do NOT inherit the user's interactive shell PATH — especially when the agent
+    /// was launched from a GUI/IDE (VS Code, JetBrains), where `~/.local/bin` is essentially never on
+    /// PATH. A bare `clinotify` would be command-not-found and the hook would silently no-op. Writing the
+    /// absolute path makes the hook fire regardless of PATH.
+    private var cliPath: String { home(".local/bin/\(channel.cliName)").path }
+    /// Shell-quoted absolute path. Claude runs hook commands via a shell, so quote it in case the home
+    /// directory contains spaces.
+    private var quotedCLIPath: String { "\"\(cliPath)\"" }
+    private var claudeDoneCommand: String { "\(quotedCLIPath) event --source claude_code --type done" }
+    private var claudeAttentionCommand: String { "\(quotedCLIPath) event --source claude_code --type attention" }
+    private var claudeDismissCommand: String { "\(quotedCLIPath) dismiss" }
+    private var codexNotifyLine: String { "notify = [\"\(cliPath)\", \"codex-event\"]" }
+
+    // Legacy v0.1.0 bare-name forms. Stripped on install (migrated to the absolute path above) and on
+    // uninstall, so upgrading from v0.1.0 never leaves a duplicate or an orphaned bare hook line.
+    private var legacyClaudeDoneCommand: String { "\(cli) event --source claude_code --type done" }
+    private var legacyClaudeAttentionCommand: String { "\(cli) event --source claude_code --type attention" }
+    private var legacyClaudeDismissCommand: String { "\(cli) dismiss" }
+    private var legacyCodexNotifyLine: String { "notify = [\"\(cli)\", \"codex-event\"]" }
 
     /// Interactive-selection tools: ones that present a choice and then block waiting for the user.
     /// `AskUserQuestion` (a question with options) and `ExitPlanMode` (plan approval) are the two.
@@ -55,22 +72,25 @@ public final class Installer {
 
         var root = try loadJSONObject(url) ?? [:]
         var hooks = root["hooks"] as? [String: Any] ?? [:]
+        // For each event: strip any legacy v0.1.0 bare-name line first (migration), then merge the
+        // current absolute-path command. Stripping-then-merging keeps install idempotent across the
+        // command-format change so an upgrade never leaves a duplicate hook.
         hooks["Stop"] = mergedClaudeHookArray(
-            existing: hooks["Stop"] as? [[String: Any]] ?? [],
+            existing: removeClaudeCommand(from: hooks["Stop"] as? [[String: Any]] ?? [], command: legacyClaudeDoneCommand),
             command: claudeDoneCommand
         )
         hooks["Notification"] = mergedClaudeHookArray(
-            existing: hooks["Notification"] as? [[String: Any]] ?? [],
+            existing: removeClaudeCommand(from: hooks["Notification"] as? [[String: Any]] ?? [], command: legacyClaudeAttentionCommand),
             command: claudeAttentionCommand
         )
         // Auto-dismiss the toast the moment the user submits a prompt in that session, and clean up
         // when the session ends. Both pass the session_id on stdin, which `clinotify dismiss` reads.
         hooks["UserPromptSubmit"] = mergedClaudeHookArray(
-            existing: hooks["UserPromptSubmit"] as? [[String: Any]] ?? [],
+            existing: removeClaudeCommand(from: hooks["UserPromptSubmit"] as? [[String: Any]] ?? [], command: legacyClaudeDismissCommand),
             command: claudeDismissCommand
         )
         hooks["SessionEnd"] = mergedClaudeHookArray(
-            existing: hooks["SessionEnd"] as? [[String: Any]] ?? [],
+            existing: removeClaudeCommand(from: hooks["SessionEnd"] as? [[String: Any]] ?? [], command: legacyClaudeDismissCommand),
             command: claudeDismissCommand
         )
         // Interactive selection prompts (AskUserQuestion / ExitPlanMode) don't fire Notification when
@@ -78,12 +98,12 @@ public final class Installer {
         // on PreToolUse (the instant the choice appears) and dismiss it on PostToolUse (the instant
         // the user answers) — both scoped to those tools via the matcher.
         hooks["PreToolUse"] = mergedClaudeHookArray(
-            existing: hooks["PreToolUse"] as? [[String: Any]] ?? [],
+            existing: removeClaudeCommand(from: hooks["PreToolUse"] as? [[String: Any]] ?? [], command: legacyClaudeAttentionCommand),
             command: claudeAttentionCommand,
             matcher: claudeSelectionMatcher
         )
         hooks["PostToolUse"] = mergedClaudeHookArray(
-            existing: hooks["PostToolUse"] as? [[String: Any]] ?? [],
+            existing: removeClaudeCommand(from: hooks["PostToolUse"] as? [[String: Any]] ?? [], command: legacyClaudeDismissCommand),
             command: claudeDismissCommand,
             matcher: claudeSelectionMatcher
         )
@@ -95,54 +115,20 @@ public final class Installer {
         let url = home(".claude/settings.json")
         guard var root = try loadJSONObject(url),
               var hooks = root["hooks"] as? [String: Any] else { return }
-        setOrRemove(
-            key: "Stop",
-            in: &hooks,
-            value: removeClaudeCommand(
-            from: hooks["Stop"] as? [[String: Any]] ?? [],
-            command: claudeDoneCommand
-            )
-        )
-        setOrRemove(
-            key: "Notification",
-            in: &hooks,
-            value: removeClaudeCommand(
-            from: hooks["Notification"] as? [[String: Any]] ?? [],
-            command: claudeAttentionCommand
-            )
-        )
-        setOrRemove(
-            key: "UserPromptSubmit",
-            in: &hooks,
-            value: removeClaudeCommand(
-            from: hooks["UserPromptSubmit"] as? [[String: Any]] ?? [],
-            command: claudeDismissCommand
-            )
-        )
-        setOrRemove(
-            key: "SessionEnd",
-            in: &hooks,
-            value: removeClaudeCommand(
-            from: hooks["SessionEnd"] as? [[String: Any]] ?? [],
-            command: claudeDismissCommand
-            )
-        )
-        setOrRemove(
-            key: "PreToolUse",
-            in: &hooks,
-            value: removeClaudeCommand(
-            from: hooks["PreToolUse"] as? [[String: Any]] ?? [],
-            command: claudeAttentionCommand
-            )
-        )
-        setOrRemove(
-            key: "PostToolUse",
-            in: &hooks,
-            value: removeClaudeCommand(
-            from: hooks["PostToolUse"] as? [[String: Any]] ?? [],
-            command: claudeDismissCommand
-            )
-        )
+        // Remove BOTH the current absolute-path command and the legacy v0.1.0 bare-name form, so an
+        // uninstall after upgrading from v0.1.0 leaves nothing behind.
+        setOrRemove(key: "Stop", in: &hooks,
+            value: removeClaudeCommands(from: hooks["Stop"] as? [[String: Any]] ?? [], claudeDoneCommand, legacyClaudeDoneCommand))
+        setOrRemove(key: "Notification", in: &hooks,
+            value: removeClaudeCommands(from: hooks["Notification"] as? [[String: Any]] ?? [], claudeAttentionCommand, legacyClaudeAttentionCommand))
+        setOrRemove(key: "UserPromptSubmit", in: &hooks,
+            value: removeClaudeCommands(from: hooks["UserPromptSubmit"] as? [[String: Any]] ?? [], claudeDismissCommand, legacyClaudeDismissCommand))
+        setOrRemove(key: "SessionEnd", in: &hooks,
+            value: removeClaudeCommands(from: hooks["SessionEnd"] as? [[String: Any]] ?? [], claudeDismissCommand, legacyClaudeDismissCommand))
+        setOrRemove(key: "PreToolUse", in: &hooks,
+            value: removeClaudeCommands(from: hooks["PreToolUse"] as? [[String: Any]] ?? [], claudeAttentionCommand, legacyClaudeAttentionCommand))
+        setOrRemove(key: "PostToolUse", in: &hooks,
+            value: removeClaudeCommands(from: hooks["PostToolUse"] as? [[String: Any]] ?? [], claudeDismissCommand, legacyClaudeDismissCommand))
         root["hooks"] = hooks
         try writeJSONObject(root, to: url)
         // Surgical removal preserves hooks the user added after install, so we never restore the full
@@ -186,7 +172,10 @@ public final class Installer {
         let output = existing
             .split(separator: "\n", omittingEmptySubsequences: false)
             .map(String.init)
-            .filter { $0.trimmingCharacters(in: .whitespaces) != codexNotifyLine }
+            .filter {
+                let trimmed = $0.trimmingCharacters(in: .whitespaces)
+                return trimmed != codexNotifyLine && trimmed != legacyCodexNotifyLine
+            }
             .joined(separator: "\n")
         try output.write(to: url, atomically: true, encoding: .utf8)
     }
@@ -239,6 +228,12 @@ public final class Installer {
         return result
     }
 
+    /// Strip every listed command from the event array (used to remove the current command AND its
+    /// legacy bare-name form in one pass).
+    private func removeClaudeCommands(from existing: [[String: Any]], _ commands: String...) -> [[String: Any]] {
+        commands.reduce(existing) { removeClaudeCommand(from: $0, command: $1) }
+    }
+
     private func removeClaudeCommand(from existing: [[String: Any]], command: String) -> [[String: Any]] {
         existing.compactMap { entry in
             var mutable = entry
@@ -275,6 +270,17 @@ public final class Installer {
 
     private func writeJSONObject(_ object: [String: Any], to url: URL) throws {
         let data = try JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys])
+        // Skip the write when the normalized content is unchanged (idempotent re-install), so a no-op
+        // never rewrites the user's settings.json or churns its mtime. .sortedKeys is kept because it
+        // makes the output deterministic — JSONSerialization round-trips through an unordered dictionary,
+        // so the user's original key order can't be preserved here regardless; sorting at least keeps
+        // re-installs from producing spurious diffs.
+        if let existing = try? Data(contentsOf: url),
+           let existingObject = try? JSONSerialization.jsonObject(with: existing),
+           let normalizedExisting = try? JSONSerialization.data(withJSONObject: existingObject, options: [.prettyPrinted, .sortedKeys]),
+           normalizedExisting == data {
+            return
+        }
         try data.write(to: url, options: .atomic)
     }
 
