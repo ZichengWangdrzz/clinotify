@@ -11,6 +11,7 @@
 CLINotify watches **Claude Code** sessions and tells you when they're done or waiting on you, so you can step away without babysitting the terminal. The toast is a screen-corner window, so it works in **every** terminal — Ghostty, iTerm2, Apple Terminal, kitty, WezTerm, the VS Code terminal, and inside tmux — because it never targets the terminal itself.
 
 > [!IMPORTANT]
+> **macOS only for now.** CLINotify runs on **macOS 13 (Ventura) or later** — there is no Windows or Linux version yet.
 > **Codex is not supported yet.** CLINotify currently supports **Claude Code only** — Codex support is on the way.
 
 - One toast per session. Set it up once; new sessions auto-register.
