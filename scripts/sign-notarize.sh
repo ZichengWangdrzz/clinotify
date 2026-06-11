@@ -29,8 +29,9 @@ sign + notarize for real. The real run does, in order:
   ditto -c -k --keepParent "$APP_PATH" "$APP_PATH.zip"
   xcrun notarytool submit "$APP_PATH.zip" --apple-id "<id>" --team-id "<team>" --password "***" --wait
   xcrun stapler staple "$APP_PATH" && xcrun stapler validate "$APP_PATH"
-  # 4. Build the DMG FROM the stapled app, then notarize + staple the DMG too:
+  # 4. Build the DMG FROM the stapled app, sign it, then notarize + staple the DMG too:
   scripts/create-dmg.sh
+  codesign --force --timestamp --sign "<identity>" "$DMG_PATH"
   xcrun notarytool submit "$DMG_PATH" --apple-id "<id>" --team-id "<team>" --password "***" --wait
   xcrun stapler staple "$DMG_PATH" && xcrun stapler validate "$DMG_PATH"
   # 5. Final Gatekeeper gate:
@@ -96,8 +97,12 @@ xcrun stapler staple "$APP_PATH"
 xcrun stapler validate "$APP_PATH"
 rm -f "$APP_ZIP"
 
-# 4. Build the DMG FROM the stapled app, then notarize + staple the DMG for download-time Gatekeeper.
+# 4. Build the DMG FROM the stapled app, SIGN it, then notarize + staple it. The DMG must carry its own
+#    primary Developer ID signature: the step-5 gate (`spctl -t open --context context:primary-signature`)
+#    rejects a notarized-but-unsigned DMG as "no usable signature". Sign BEFORE notarizing (the notary
+#    checks the signature). A signed + notarized + stapled DMG is the download-time Gatekeeper gold standard.
 "$ROOT_DIR/scripts/create-dmg.sh" >/dev/null
+codesign --force --timestamp --sign "$IDENTITY" "$DMG_PATH"
 notarize "$DMG_PATH"
 xcrun stapler staple "$DMG_PATH"
 xcrun stapler validate "$DMG_PATH"
